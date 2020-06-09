@@ -5,13 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import ReactDOM from 'react-dom';
-import {setComponentTree} from 'events/EventPluginUtils';
-import ResponderEventPlugin from 'events/ResponderEventPlugin';
-import ResponderTouchHistoryStore from 'events/ResponderTouchHistoryStore';
+import * as ReactDOM from 'react-dom';
+import {setComponentTree} from 'legacy-events/EventPluginUtils';
+import ResponderEventPlugin from 'legacy-events/ResponderEventPlugin';
+import ResponderTouchHistoryStore from 'legacy-events/ResponderTouchHistoryStore';
 
 // Inject react-dom's ComponentTree into this module.
-// Keep in sync with ReactDOM.js and ReactTestUtils.js:
+// Keep in sync with ReactDOM.js, ReactTestUtils.js, and ReactTestUtilsAct.js:
 const [
   getInstanceFromNode,
   getNodeFromInstance,

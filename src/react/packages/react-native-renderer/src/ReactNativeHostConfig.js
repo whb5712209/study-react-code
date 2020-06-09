@@ -7,15 +7,15 @@
  * @flow
  */
 
-import type {ReactNativeBaseComponentViewConfig} from './ReactNativeTypes';
-
 import invariant from 'shared/invariant';
 
 // Modules provided by RN:
-import UIManager from 'UIManager';
-import deepFreezeAndThrowOnMutationInDev from 'deepFreezeAndThrowOnMutationInDev';
+import {
+  ReactNativeViewConfigRegistry,
+  UIManager,
+  deepFreezeAndThrowOnMutationInDev,
+} from 'react-native/Libraries/ReactPrivate/ReactNativePrivateInterface';
 
-import {get as getViewConfigForType} from 'ReactNativeViewConfigRegistry';
 import {create, diff} from './ReactNativeAttributePayload';
 import {
   precacheFiberNode,
@@ -23,21 +23,13 @@ import {
   updateFiberProps,
 } from './ReactNativeComponentTree';
 import ReactNativeFiberHostComponent from './ReactNativeFiberHostComponent';
-import {
-  now as ReactNativeFrameSchedulingNow,
-  cancelDeferredCallback as ReactNativeFrameSchedulingCancelDeferredCallback,
-  scheduleDeferredCallback as ReactNativeFrameSchedulingScheduleDeferredCallback,
-  shouldYield as ReactNativeFrameSchedulingShouldYield,
-} from './ReactNativeFrameScheduling';
+
+const {get: getViewConfigForType} = ReactNativeViewConfigRegistry;
 
 export type Type = string;
 export type Props = Object;
 export type Container = number;
-export type Instance = {
-  _children: Array<Instance | number>,
-  _nativeTag: number,
-  viewConfig: ReactNativeBaseComponentViewConfig<>,
-};
+export type Instance = ReactNativeFiberHostComponent;
 export type TextInstance = number;
 export type HydratableInstance = Instance | TextInstance;
 export type PublicInstance = Instance;
@@ -107,11 +99,6 @@ export function createInstance(
     }
   }
 
-  invariant(
-    type !== 'RCTView' || !hostContext.isInAParentText,
-    'Nesting of <View> within <Text> is not currently supported.',
-  );
-
   const updatePayload = create(props, viewConfig.validAttributes);
 
   UIManager.createView(
@@ -170,11 +157,10 @@ export function finalizeInitialChildren(
 
   // Map from child objects to native tags.
   // Either way we need to pass a copy of the Array to prevent it from being frozen.
-  const nativeTags = parentInstance._children.map(
-    child =>
-      typeof child === 'number'
-        ? child // Leaf node (eg text)
-        : child._nativeTag,
+  const nativeTags = parentInstance._children.map(child =>
+    typeof child === 'number'
+      ? child // Leaf node (eg text)
+      : child._nativeTag,
   );
 
   UIManager.setChildren(
@@ -234,17 +220,12 @@ export function resetAfterCommit(containerInfo: Container): void {
   // Noop
 }
 
-export const now = ReactNativeFrameSchedulingNow;
 export const isPrimaryRenderer = true;
-export const scheduleDeferredCallback = ReactNativeFrameSchedulingScheduleDeferredCallback;
-export const cancelDeferredCallback = ReactNativeFrameSchedulingCancelDeferredCallback;
-export const shouldYield = ReactNativeFrameSchedulingShouldYield;
+export const warnsIfNotActing = true;
 
 export const scheduleTimeout = setTimeout;
 export const cancelTimeout = clearTimeout;
 export const noTimeout = -1;
-export const schedulePassiveEffects = scheduleDeferredCallback;
-export const cancelPassiveEffects = cancelDeferredCallback;
 
 export function shouldDeprioritizeSubtree(type: string, props: Props): boolean {
   return false;
@@ -487,4 +468,48 @@ export function unhideTextInstance(
   text: string,
 ): void {
   throw new Error('Not yet implemented.');
+}
+
+export function DEPRECATED_mountResponderInstance(
+  responder: any,
+  responderInstance: any,
+  props: Object,
+  state: Object,
+  instance: Instance,
+) {
+  throw new Error('Not yet implemented.');
+}
+
+export function DEPRECATED_unmountResponderInstance(
+  responderInstance: any,
+): void {
+  throw new Error('Not yet implemented.');
+}
+
+export function getFundamentalComponentInstance(fundamentalInstance: any) {
+  throw new Error('Not yet implemented.');
+}
+
+export function mountFundamentalComponent(fundamentalInstance: any) {
+  throw new Error('Not yet implemented.');
+}
+
+export function shouldUpdateFundamentalComponent(fundamentalInstance: any) {
+  throw new Error('Not yet implemented.');
+}
+
+export function updateFundamentalComponent(fundamentalInstance: any) {
+  throw new Error('Not yet implemented.');
+}
+
+export function unmountFundamentalComponent(fundamentalInstance: any) {
+  throw new Error('Not yet implemented.');
+}
+
+export function getInstanceFromNode(node: any) {
+  throw new Error('Not yet implemented.');
+}
+
+export function beforeRemoveInstance(instance: any) {
+  // noop
 }

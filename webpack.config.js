@@ -22,6 +22,7 @@ let webpackConfig = {
             'shared': path.resolve(__dirname, './src/react/packages/shared'),
             'react-reconciler': path.resolve(__dirname, './src/react/packages/react-reconciler'),
             'react-events': path.resolve(__dirname, './src/react/packages/events'),
+            'legacy-events':path.resolve(__dirname, './src/react/packages/legacy-events'),
         }
     },
     module: {
@@ -53,7 +54,14 @@ let webpackConfig = {
         new webpack.DefinePlugin({
             __DEV__: true,
             __PROFILE__: true,
-            __UMD__: true
+            __UMD__: true,
+            spyOnDev: true,
+            spyOnDevAndProd: true,
+            spyOnProd: true,
+            __PROFILE__: true,
+            __UMD__: true,
+            __EXPERIMENTAL__: true,
+            trustedTypes: true,
         })
     ]
 }

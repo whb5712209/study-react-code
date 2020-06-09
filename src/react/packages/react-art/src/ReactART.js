@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import React from 'react';
+import * as React from 'react';
 import ReactVersion from 'shared/ReactVersion';
+import {LegacyRoot} from 'shared/ReactRootTags';
 import {
   createContainer,
   updateContainer,
@@ -65,7 +66,7 @@ class Surface extends React.Component {
 
     this._surface = Mode.Surface(+width, +height, this._tagRef);
 
-    this._mountNode = createContainer(this._surface);
+    this._mountNode = createContainer(this._surface, LegacyRoot, false, null);
     updateContainer(this.props.children, this._mountNode, this);
   }
 

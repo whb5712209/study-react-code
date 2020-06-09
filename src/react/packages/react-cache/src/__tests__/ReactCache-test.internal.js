@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,54 +14,14 @@ let createResource;
 let React;
 let ReactFeatureFlags;
 let ReactTestRenderer;
+let Scheduler;
 let Suspense;
 let TextResource;
 let textResourceShouldFail;
-let flushScheduledWork;
-let evictLRU;
 
 describe('ReactCache', () => {
   beforeEach(() => {
     jest.resetModules();
-
-    let currentPriorityLevel = 3;
-
-    jest.mock('scheduler', () => {
-      let callbacks = [];
-      return {
-        unstable_scheduleCallback(callback) {
-          const callbackIndex = callbacks.length;
-          callbacks.push(callback);
-          return {callbackIndex};
-        },
-        flushScheduledWork() {
-          while (callbacks.length) {
-            const callback = callbacks.pop();
-            callback();
-          }
-        },
-
-        unstable_ImmediatePriority: 1,
-        unstable_UserBlockingPriority: 2,
-        unstable_NormalPriority: 3,
-        unstable_LowPriority: 4,
-        unstable_IdlePriority: 5,
-
-        unstable_runWithPriority(priorityLevel, fn) {
-          const prevPriorityLevel = currentPriorityLevel;
-          currentPriorityLevel = priorityLevel;
-          try {
-            return fn();
-          } finally {
-            currentPriorityLevel = prevPriorityLevel;
-          }
-        },
-
-        unstable_getCurrentPriorityLevel() {
-          return currentPriorityLevel;
-        },
-      };
-    });
 
     ReactFeatureFlags = require('shared/ReactFeatureFlags');
     ReactFeatureFlags.debugRenderPhaseSideEffectsForStrictMode = false;
@@ -71,59 +31,61 @@ describe('ReactCache', () => {
     ReactCache = require('react-cache');
     createResource = ReactCache.unstable_createResource;
     ReactTestRenderer = require('react-test-renderer');
-    flushScheduledWork = require('scheduler').flushScheduledWork;
-    evictLRU = flushScheduledWork;
+    Scheduler = require('scheduler');
 
-    TextResource = createResource(([text, ms = 0]) => {
-      let listeners = null;
-      let status = 'pending';
-      let value = null;
-      return {
-        then(resolve, reject) {
-          switch (status) {
-            case 'pending': {
-              if (listeners === null) {
-                listeners = [{resolve, reject}];
-                setTimeout(() => {
-                  if (textResourceShouldFail) {
-                    ReactTestRenderer.unstable_yield(
-                      `Promise rejected [${text}]`,
-                    );
-                    status = 'rejected';
-                    value = new Error('Failed to load: ' + text);
-                    listeners.forEach(listener => listener.reject(value));
-                  } else {
-                    ReactTestRenderer.unstable_yield(
-                      `Promise resolved [${text}]`,
-                    );
-                    status = 'resolved';
-                    value = text;
-                    listeners.forEach(listener => listener.resolve(value));
-                  }
-                }, ms);
-              } else {
-                listeners.push({resolve, reject});
+    TextResource = createResource(
+      ([text, ms = 0]) => {
+        let listeners = null;
+        let status = 'pending';
+        let value = null;
+        return {
+          then(resolve, reject) {
+            switch (status) {
+              case 'pending': {
+                if (listeners === null) {
+                  listeners = [{resolve, reject}];
+                  setTimeout(() => {
+                    if (textResourceShouldFail) {
+                      Scheduler.unstable_yieldValue(
+                        `Promise rejected [${text}]`,
+                      );
+                      status = 'rejected';
+                      value = new Error('Failed to load: ' + text);
+                      listeners.forEach(listener => listener.reject(value));
+                    } else {
+                      Scheduler.unstable_yieldValue(
+                        `Promise resolved [${text}]`,
+                      );
+                      status = 'resolved';
+                      value = text;
+                      listeners.forEach(listener => listener.resolve(value));
+                    }
+                  }, ms);
+                } else {
+                  listeners.push({resolve, reject});
+                }
+                break;
               }
-              break;
+              case 'resolved': {
+                resolve(value);
+                break;
+              }
+              case 'rejected': {
+                reject(value);
+                break;
+              }
             }
-            case 'resolved': {
-              resolve(value);
-              break;
-            }
-            case 'rejected': {
-              reject(value);
-              break;
-            }
-          }
-        },
-      };
-    }, ([text, ms]) => text);
+          },
+        };
+      },
+      ([text, ms]) => text,
+    );
 
     textResourceShouldFail = false;
   });
 
   function Text(props) {
-    ReactTestRenderer.unstable_yield(props.text);
+    Scheduler.unstable_yieldValue(props.text);
     return props.text;
   }
 
@@ -131,13 +93,13 @@ describe('ReactCache', () => {
     const text = props.text;
     try {
       TextResource.read([props.text, props.ms]);
-      ReactTestRenderer.unstable_yield(text);
+      Scheduler.unstable_yieldValue(text);
       return text;
     } catch (promise) {
       if (typeof promise.then === 'function') {
-        ReactTestRenderer.unstable_yield(`Suspend! [${text}]`);
+        Scheduler.unstable_yieldValue(`Suspend! [${text}]`);
       } else {
-        ReactTestRenderer.unstable_yield(`Error! [${text}]`);
+        Scheduler.unstable_yieldValue(`Error! [${text}]`);
       }
       throw promise;
     }
@@ -152,15 +114,15 @@ describe('ReactCache', () => {
       );
     }
 
-    const root = ReactTestRenderer.create(<App />, {
+    ReactTestRenderer.create(<App />, {
       unstable_isConcurrent: true,
     });
 
-    expect(root).toFlushAndYield(['Suspend! [Hi]', 'Loading...']);
+    expect(Scheduler).toFlushAndYield(['Suspend! [Hi]', 'Loading...']);
 
     jest.advanceTimersByTime(100);
-    expect(ReactTestRenderer).toHaveYielded(['Promise resolved [Hi]']);
-    expect(root).toFlushAndYield(['Hi']);
+    expect(Scheduler).toHaveYielded(['Promise resolved [Hi]']);
+    expect(Scheduler).toFlushAndYield(['Hi']);
   });
 
   it('throws an error on the subsequent read if the promise is rejected', async () => {
@@ -176,19 +138,19 @@ describe('ReactCache', () => {
       unstable_isConcurrent: true,
     });
 
-    expect(root).toFlushAndYield(['Suspend! [Hi]', 'Loading...']);
+    expect(Scheduler).toFlushAndYield(['Suspend! [Hi]', 'Loading...']);
 
     textResourceShouldFail = true;
     jest.advanceTimersByTime(100);
-    expect(ReactTestRenderer).toHaveYielded(['Promise rejected [Hi]']);
+    expect(Scheduler).toHaveYielded(['Promise rejected [Hi]']);
 
-    expect(root).toFlushAndThrow('Failed to load: Hi');
-    expect(ReactTestRenderer).toHaveYielded(['Error! [Hi]', 'Error! [Hi]']);
+    expect(Scheduler).toFlushAndThrow('Failed to load: Hi');
+    expect(Scheduler).toHaveYielded(['Error! [Hi]', 'Error! [Hi]']);
 
     // Should throw again on a subsequent read
     root.update(<App />);
-    expect(root).toFlushAndThrow('Failed to load: Hi');
-    expect(ReactTestRenderer).toHaveYielded(['Error! [Hi]', 'Error! [Hi]']);
+    expect(Scheduler).toFlushAndThrow('Failed to load: Hi');
+    expect(Scheduler).toHaveYielded(['Error! [Hi]', 'Error! [Hi]']);
   });
 
   it('warns if non-primitive key is passed to a resource without a hash function', () => {
@@ -201,11 +163,11 @@ describe('ReactCache', () => {
     });
 
     function App() {
-      ReactTestRenderer.unstable_yield('App');
+      Scheduler.unstable_yieldValue('App');
       return BadTextResource.read(['Hi', 100]);
     }
 
-    const root = ReactTestRenderer.create(
+    ReactTestRenderer.create(
       <Suspense fallback={<Text text="Loading..." />}>
         <App />
       </Suspense>,
@@ -216,18 +178,15 @@ describe('ReactCache', () => {
 
     if (__DEV__) {
       expect(() => {
-        expect(root).toFlushAndYield(['App', 'Loading...']);
-      }).toWarnDev(
-        [
-          'Invalid key type. Expected a string, number, symbol, or ' +
-            'boolean, but instead received: Hi,100\n\n' +
-            'To use non-primitive values as keys, you must pass a hash ' +
-            'function as the second argument to createResource().',
-        ],
-        {withoutStack: true},
-      );
+        expect(Scheduler).toFlushAndYield(['App', 'Loading...']);
+      }).toErrorDev([
+        'Invalid key type. Expected a string, number, symbol, or ' +
+          'boolean, but instead received: Hi,100\n\n' +
+          'To use non-primitive values as keys, you must pass a hash ' +
+          'function as the second argument to createResource().',
+      ]);
     } else {
-      expect(root).toFlushAndYield(['App', 'Loading...']);
+      expect(Scheduler).toFlushAndYield(['App', 'Loading...']);
     }
   });
 
@@ -245,19 +204,19 @@ describe('ReactCache', () => {
         unstable_isConcurrent: true,
       },
     );
-    expect(root).toFlushAndYield([
+    expect(Scheduler).toFlushAndYield([
       'Suspend! [1]',
       'Suspend! [2]',
       'Suspend! [3]',
       'Loading...',
     ]);
     jest.advanceTimersByTime(100);
-    expect(ReactTestRenderer).toHaveYielded([
+    expect(Scheduler).toHaveYielded([
       'Promise resolved [1]',
       'Promise resolved [2]',
       'Promise resolved [3]',
     ]);
-    expect(root).toFlushAndYield([1, 2, 3]);
+    expect(Scheduler).toFlushAndYield([1, 2, 3]);
     expect(root).toMatchRenderedOutput('123');
 
     // Render 1, 4, 5
@@ -269,24 +228,22 @@ describe('ReactCache', () => {
       </Suspense>,
     );
 
-    expect(root).toFlushAndYield([
+    expect(Scheduler).toFlushAndYield([
       1,
       'Suspend! [4]',
       'Suspend! [5]',
       'Loading...',
     ]);
     jest.advanceTimersByTime(100);
-    expect(ReactTestRenderer).toHaveYielded([
+    expect(Scheduler).toHaveYielded([
       'Promise resolved [4]',
       'Promise resolved [5]',
     ]);
-    expect(root).toFlushAndYield([1, 4, 5]);
+    expect(Scheduler).toFlushAndYield([1, 4, 5]);
     expect(root).toMatchRenderedOutput('145');
 
     // We've now rendered values 1, 2, 3, 4, 5, over our limit of 3. The least
-    // recently used values are 2 and 3. They will be evicted during the
-    // next sweep.
-    evictLRU();
+    // recently used values are 2 and 3. They should have been evicted.
 
     root.update(
       <Suspense fallback={<Text text="Loading..." />}>
@@ -296,7 +253,7 @@ describe('ReactCache', () => {
       </Suspense>,
     );
 
-    expect(root).toFlushAndYield([
+    expect(Scheduler).toFlushAndYield([
       // 1 is still cached
       1,
       // 2 and 3 suspend because they were evicted from the cache
@@ -305,11 +262,11 @@ describe('ReactCache', () => {
       'Loading...',
     ]);
     jest.advanceTimersByTime(100);
-    expect(ReactTestRenderer).toHaveYielded([
+    expect(Scheduler).toHaveYielded([
       'Promise resolved [2]',
       'Promise resolved [3]',
     ]);
-    expect(root).toFlushAndYield([1, 2, 3]);
+    expect(Scheduler).toFlushAndYield([1, 2, 3]);
     expect(root).toMatchRenderedOutput('123');
   });
 
@@ -330,51 +287,54 @@ describe('ReactCache', () => {
       },
     );
 
-    expect(root).toFlushAndYield(['Loading...']);
+    expect(Scheduler).toFlushAndYield(['Loading...']);
 
     jest.advanceTimersByTime(1000);
-    expect(ReactTestRenderer).toHaveYielded([
+    expect(Scheduler).toHaveYielded([
       'Promise resolved [B]',
       'Promise resolved [A]',
     ]);
-    expect(root).toFlushAndYield(['Result']);
+    expect(Scheduler).toFlushAndYield(['Result']);
     expect(root).toMatchRenderedOutput('Result');
   });
 
   it('if a thenable resolves multiple times, does not update the first cached value', () => {
     let resolveThenable;
-    const BadTextResource = createResource(([text, ms = 0]) => {
-      let listeners = null;
-      let value = null;
-      return {
-        then(resolve, reject) {
-          if (value !== null) {
-            resolve(value);
-          } else {
-            if (listeners === null) {
-              listeners = [resolve];
-              resolveThenable = v => {
-                listeners.forEach(listener => listener(v));
-              };
+    const BadTextResource = createResource(
+      ([text, ms = 0]) => {
+        let listeners = null;
+        let value = null;
+        return {
+          then(resolve, reject) {
+            if (value !== null) {
+              resolve(value);
             } else {
-              listeners.push(resolve);
+              if (listeners === null) {
+                listeners = [resolve];
+                resolveThenable = v => {
+                  listeners.forEach(listener => listener(v));
+                };
+              } else {
+                listeners.push(resolve);
+              }
             }
-          }
-        },
-      };
-    }, ([text, ms]) => text);
+          },
+        };
+      },
+      ([text, ms]) => text,
+    );
 
     function BadAsyncText(props) {
       const text = props.text;
       try {
         const actualText = BadTextResource.read([props.text, props.ms]);
-        ReactTestRenderer.unstable_yield(actualText);
+        Scheduler.unstable_yieldValue(actualText);
         return actualText;
       } catch (promise) {
         if (typeof promise.then === 'function') {
-          ReactTestRenderer.unstable_yield(`Suspend! [${text}]`);
+          Scheduler.unstable_yieldValue(`Suspend! [${text}]`);
         } else {
-          ReactTestRenderer.unstable_yield(`Error! [${text}]`);
+          Scheduler.unstable_yieldValue(`Error! [${text}]`);
         }
         throw promise;
       }
@@ -389,7 +349,7 @@ describe('ReactCache', () => {
       },
     );
 
-    expect(root).toFlushAndYield(['Suspend! [Hi]', 'Loading...']);
+    expect(Scheduler).toFlushAndYield(['Suspend! [Hi]', 'Loading...']);
 
     resolveThenable('Hi');
     // This thenable improperly resolves twice. We should not update the
@@ -405,8 +365,8 @@ describe('ReactCache', () => {
       },
     );
 
-    expect(ReactTestRenderer).toHaveYielded([]);
-    expect(root).toFlushAndYield(['Hi']);
+    expect(Scheduler).toHaveYielded([]);
+    expect(Scheduler).toFlushAndYield(['Hi']);
     expect(root).toMatchRenderedOutput('Hi');
   });
 

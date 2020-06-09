@@ -18,6 +18,9 @@
             ],
             "react-events/*": [
                 "./src/react/packages/events/*"
+            ],
+            "legacy-events/*":[
+                "./src/react/packages/legacy-events/*"
             ] 
         }
     }

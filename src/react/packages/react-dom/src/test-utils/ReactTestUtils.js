@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import React from 'react';
-import ReactDOM from 'react-dom';
+import * as React from 'react';
+import * as ReactDOM from 'react-dom';
 import {findCurrentFiberUsingSlowPath} from 'react-reconciler/reflection';
 import {get as getInstance} from 'shared/ReactInstanceMap';
 import {
@@ -15,21 +15,16 @@ import {
   HostComponent,
   HostText,
 } from 'shared/ReactWorkTags';
-import SyntheticEvent from 'events/SyntheticEvent';
+import SyntheticEvent from 'legacy-events/SyntheticEvent';
 import invariant from 'shared/invariant';
-import lowPriorityWarning from 'shared/lowPriorityWarning';
-import warningWithoutStack from 'shared/warningWithoutStack';
 import {ELEMENT_NODE} from '../shared/HTMLNodeType';
 import * as DOMTopLevelEventTypes from '../events/DOMTopLevelEventTypes';
-
-// for .act's return value
-type Thenable = {
-  then(resolve: () => mixed, reject?: () => mixed): mixed,
-};
+import {PLUGIN_EVENT_SYSTEM} from 'legacy-events/EventSystemFlags';
+import act from './ReactTestUtilsAct';
 
 const {findDOMNode} = ReactDOM;
 // Keep in sync with ReactDOMUnstableNativeDependencies.js
-// and ReactDOM.js:
+// ReactDOM.js, and ReactTestUtilsAct.js:
 const [
   getInstanceFromNode,
   /* eslint-disable no-unused-vars */
@@ -44,6 +39,10 @@ const [
   restoreStateIfNeeded,
   dispatchEvent,
   runEventsInBatch,
+  /* eslint-disable no-unused-vars */
+  flushPassiveEffects,
+  IsThisRendererActing,
+  /* eslint-enable no-unused-vars */
 ] = ReactDOM.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.Events;
 
 function Event(suffix) {}
@@ -63,7 +62,7 @@ let hasWarnedAboutDeprecatedMockComponent = false;
  */
 function simulateNativeEventOnNode(topLevelType, node, fakeNativeEvent) {
   fakeNativeEvent.target = node;
-  dispatchEvent(topLevelType, fakeNativeEvent);
+  dispatchEvent(topLevelType, PLUGIN_EVENT_SYSTEM, document, fakeNativeEvent);
 }
 
 /**
@@ -150,9 +149,6 @@ function validateClassInstance(inst, methodName) {
     received,
   );
 }
-
-// a stub element, lazily initialized, used by act() when flushing effects
-let actContainerElement = null;
 
 /**
  * Utilities for making it easy to test React components.
@@ -362,14 +358,15 @@ const ReactTestUtils = {
    * @return {object} the ReactTestUtils object (for chaining)
    */
   mockComponent: function(module, mockTagName) {
-    if (!hasWarnedAboutDeprecatedMockComponent) {
-      hasWarnedAboutDeprecatedMockComponent = true;
-      lowPriorityWarning(
-        false,
-        'ReactTestUtils.mockComponent() is deprecated. ' +
-          'Use shallow rendering or jest.mock() instead.\n\n' +
-          'See https://fb.me/test-utils-mock-component for more information.',
-      );
+    if (__DEV__) {
+      if (!hasWarnedAboutDeprecatedMockComponent) {
+        hasWarnedAboutDeprecatedMockComponent = true;
+        console.warn(
+          'ReactTestUtils.mockComponent() is deprecated. ' +
+            'Use shallow rendering or jest.mock() instead.\n\n' +
+            'See https://fb.me/test-utils-mock-component for more information.',
+        );
+      }
     }
 
     mockTagName = mockTagName || module.mockTagName || 'div';
@@ -390,58 +387,7 @@ const ReactTestUtils = {
   Simulate: null,
   SimulateNative: {},
 
-  act(callback: () => void): Thenable {
-    if (actContainerElement === null) {
-      // warn if we can't actually create the stub element
-      if (__DEV__) {
-        warningWithoutStack(
-          typeof document !== 'undefined' &&
-            document !== null &&
-            typeof document.createElement === 'function',
-          'It looks like you called TestUtils.act(...) in a non-browser environment. ' +
-            "If you're using TestRenderer for your tests, you should call " +
-            'TestRenderer.act(...) instead of TestUtils.act(...).',
-        );
-      }
-      // then make it
-      actContainerElement = document.createElement('div');
-    }
-
-    const result = ReactDOM.unstable_batchedUpdates(callback);
-    // note: keep these warning messages in sync with
-    // createReactNoop.js and ReactTestRenderer.js
-    if (__DEV__) {
-      if (result !== undefined) {
-        let addendum;
-        if (result !== null && typeof result.then === 'function') {
-          addendum =
-            '\n\nIt looks like you wrote ReactTestUtils.act(async () => ...), ' +
-            'or returned a Promise from the callback passed to it. ' +
-            'Putting asynchronous logic inside ReactTestUtils.act(...) is not supported.\n';
-        } else {
-          addendum = ' You returned: ' + result;
-        }
-        warningWithoutStack(
-          false,
-          'The callback passed to ReactTestUtils.act(...) function must not return anything.%s',
-          addendum,
-        );
-      }
-    }
-    ReactDOM.render(<div />, actContainerElement);
-    // we want the user to not expect a return,
-    // but we want to warn if they use it like they can await on it.
-    return {
-      then() {
-        if (__DEV__) {
-          warningWithoutStack(
-            false,
-            'Do not await the result of calling ReactTestUtils.act(...), it is not a Promise.',
-          );
-        }
-      },
-    };
-  },
+  act,
 };
 
 /**

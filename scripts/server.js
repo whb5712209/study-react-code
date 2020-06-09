@@ -1,7 +1,7 @@
 const webpack = require('webpack');
 const webpackConfig = require('../webpack.config');
 const path = require('path');
-const port = 30001;
+const port = 8000;
 
 const express = require('express');
 const webpackDevMiddleware = require('webpack-dev-middleware');
@@ -12,7 +12,7 @@ const open = require('opn');
 
 app.use(webpackDevMiddleware(compiler, {
     publicPath: '/',
-    stats: 'errors-only'
+    stats: 'errors-warnings'
 }));
 
 app.use(webpackHotMiddleware(compiler));

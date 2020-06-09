@@ -15,6 +15,11 @@ import {
   BOOLEAN,
   OVERLOADED_BOOLEAN,
 } from '../shared/DOMProperty';
+import sanitizeURL from '../shared/sanitizeURL';
+import {
+  disableJavaScriptURLs,
+  enableTrustedTypesIntegration,
+} from 'shared/ReactFeatureFlags';
 
 import type {PropertyInfo} from '../shared/DOMProperty';
 
@@ -34,6 +39,13 @@ export function getValueForProperty(
       const {propertyName} = propertyInfo;
       return (node: any)[propertyName];
     } else {
+      if (!disableJavaScriptURLs && propertyInfo.sanitizeURL) {
+        // If we haven't fully disabled javascript: URLs, and if
+        // the hydration is successful of a javascript: URL, we
+        // still want to warn on the client.
+        sanitizeURL('' + (expected: any));
+      }
+
       const attributeName = propertyInfo.attributeName;
 
       let stringValue = null;
@@ -133,7 +145,10 @@ export function setValueForProperty(
       if (value === null) {
         node.removeAttribute(attributeName);
       } else {
-        node.setAttribute(attributeName, '' + (value: any));
+        node.setAttribute(
+          attributeName,
+          enableTrustedTypesIntegration ? (value: any) : '' + (value: any),
+        );
       }
     }
     return;
@@ -159,11 +174,20 @@ export function setValueForProperty(
     const {type} = propertyInfo;
     let attributeValue;
     if (type === BOOLEAN || (type === OVERLOADED_BOOLEAN && value === true)) {
+      // If attribute type is boolean, we know for sure it won't be an execution sink
+      // and we won't require Trusted Type here.
       attributeValue = '';
     } else {
       // `setAttribute` with objects becomes only `[object]` in IE8/9,
       // ('' + value) makes it output the correct toString()-value.
-      attributeValue = '' + (value: any);
+      if (enableTrustedTypesIntegration) {
+        attributeValue = (value: any);
+      } else {
+        attributeValue = '' + (value: any);
+      }
+      if (propertyInfo.sanitizeURL) {
+        sanitizeURL(attributeValue.toString());
+      }
     }
     if (attributeNamespace) {
       node.setAttributeNS(attributeNamespace, attributeName, attributeValue);

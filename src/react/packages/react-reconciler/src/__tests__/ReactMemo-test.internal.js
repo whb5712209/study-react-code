@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,6 +17,7 @@ let React;
 let ReactFeatureFlags;
 let ReactNoop;
 let Suspense;
+let Scheduler;
 
 describe('memo', () => {
   beforeEach(() => {
@@ -26,6 +27,7 @@ describe('memo', () => {
     PropTypes = require('prop-types');
     React = require('react');
     ReactNoop = require('react-noop-renderer');
+    Scheduler = require('scheduler');
     ({Suspense} = React);
   });
 
@@ -34,7 +36,7 @@ describe('memo', () => {
   }
 
   function Text(props) {
-    ReactNoop.yield(props.text);
+    Scheduler.unstable_yieldValue(props.text);
     return <span prop={props.text} />;
   }
 
@@ -54,7 +56,7 @@ describe('memo', () => {
       return <App ref={() => {}} />;
     }
     ReactNoop.render(<Outer />);
-    expect(ReactNoop.flush).toWarnDev([
+    expect(() => expect(Scheduler).toFlushWithoutYielding()).toErrorDev([
       'Warning: Function components cannot be given refs. Attempts to access ' +
         'this ref will fail.',
     ]);
@@ -72,7 +74,7 @@ describe('memo', () => {
       return <App ref={() => {}} />;
     }
     ReactNoop.render(<Outer />);
-    expect(ReactNoop.flush).toWarnDev([
+    expect(() => expect(Scheduler).toFlushWithoutYielding()).toErrorDev([
       'Warning: Function components cannot be given refs. Attempts to access ' +
         'this ref will fail.',
     ]);
@@ -106,9 +108,9 @@ describe('memo', () => {
             <Counter count={0} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual(['Loading...']);
+        expect(Scheduler).toFlushAndYield(['Loading...']);
         await Promise.resolve();
-        expect(ReactNoop.flush()).toEqual([0]);
+        expect(Scheduler).toFlushAndYield([0]);
         expect(ReactNoop.getChildren()).toEqual([span(0)]);
 
         // Should bail out because props have not changed
@@ -117,7 +119,7 @@ describe('memo', () => {
             <Counter count={0} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual([]);
+        expect(Scheduler).toFlushAndYield([]);
         expect(ReactNoop.getChildren()).toEqual([span(0)]);
 
         // Should update because count prop changed
@@ -126,7 +128,7 @@ describe('memo', () => {
             <Counter count={1} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual([1]);
+        expect(Scheduler).toFlushAndYield([1]);
         expect(ReactNoop.getChildren()).toEqual([span(1)]);
       });
 
@@ -161,19 +163,19 @@ describe('memo', () => {
 
         const parent = React.createRef(null);
         ReactNoop.render(<Parent ref={parent} />);
-        expect(ReactNoop.flush()).toEqual(['Loading...']);
+        expect(Scheduler).toFlushAndYield(['Loading...']);
         await Promise.resolve();
-        expect(ReactNoop.flush()).toEqual(['Count: 0']);
+        expect(Scheduler).toFlushAndYield(['Count: 0']);
         expect(ReactNoop.getChildren()).toEqual([span('Count: 0')]);
 
         // Should bail out because props have not changed
         ReactNoop.render(<Parent ref={parent} />);
-        expect(ReactNoop.flush()).toEqual([]);
+        expect(Scheduler).toFlushAndYield([]);
         expect(ReactNoop.getChildren()).toEqual([span('Count: 0')]);
 
         // Should update because there was a context change
         parent.current.setState({count: 1});
-        expect(ReactNoop.flush()).toEqual(['Count: 1']);
+        expect(Scheduler).toFlushAndYield(['Count: 1']);
         expect(ReactNoop.getChildren()).toEqual([span('Count: 1')]);
       });
 
@@ -182,7 +184,7 @@ describe('memo', () => {
           return <Text text={count} />;
         }
         Counter = memo(Counter, (oldProps, newProps) => {
-          ReactNoop.yield(
+          Scheduler.unstable_yieldValue(
             `Old count: ${oldProps.count}, New count: ${newProps.count}`,
           );
           return oldProps.count === newProps.count;
@@ -193,9 +195,9 @@ describe('memo', () => {
             <Counter count={0} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual(['Loading...']);
+        expect(Scheduler).toFlushAndYield(['Loading...']);
         await Promise.resolve();
-        expect(ReactNoop.flush()).toEqual([0]);
+        expect(Scheduler).toFlushAndYield([0]);
         expect(ReactNoop.getChildren()).toEqual([span(0)]);
 
         // Should bail out because props have not changed
@@ -204,7 +206,7 @@ describe('memo', () => {
             <Counter count={0} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual(['Old count: 0, New count: 0']);
+        expect(Scheduler).toFlushAndYield(['Old count: 0, New count: 0']);
         expect(ReactNoop.getChildren()).toEqual([span(0)]);
 
         // Should update because count prop changed
@@ -213,7 +215,7 @@ describe('memo', () => {
             <Counter count={1} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual(['Old count: 0, New count: 1', 1]);
+        expect(Scheduler).toFlushAndYield(['Old count: 0, New count: 1', 1]);
         expect(ReactNoop.getChildren()).toEqual([span(1)]);
       });
 
@@ -231,9 +233,9 @@ describe('memo', () => {
             <Counter count={0} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual(['Loading...']);
+        expect(Scheduler).toFlushAndYield(['Loading...']);
         await Promise.resolve();
-        expect(ReactNoop.flush()).toEqual(['0!']);
+        expect(Scheduler).toFlushAndYield(['0!']);
         expect(ReactNoop.getChildren()).toEqual([span('0!')]);
 
         // Should bail out because props have not changed
@@ -242,7 +244,7 @@ describe('memo', () => {
             <Counter count={0} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual([]);
+        expect(Scheduler).toFlushAndYield([]);
         expect(ReactNoop.getChildren()).toEqual([span('0!')]);
 
         // Should update because count prop changed
@@ -251,7 +253,7 @@ describe('memo', () => {
             <Counter count={1} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual(['1!']);
+        expect(Scheduler).toFlushAndYield(['1!']);
         expect(ReactNoop.getChildren()).toEqual([span('1!')]);
       });
 
@@ -284,9 +286,9 @@ describe('memo', () => {
             <Counter e={5} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual(['Loading...']);
+        expect(Scheduler).toFlushAndYield(['Loading...']);
         await Promise.resolve();
-        expect(ReactNoop.flush()).toEqual([15]);
+        expect(Scheduler).toFlushAndYield([15]);
         expect(ReactNoop.getChildren()).toEqual([span(15)]);
 
         // Should bail out because props have not changed
@@ -295,7 +297,7 @@ describe('memo', () => {
             <Counter e={5} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual([]);
+        expect(Scheduler).toFlushAndYield([]);
         expect(ReactNoop.getChildren()).toEqual([span(15)]);
 
         // Should update because count prop changed
@@ -304,12 +306,14 @@ describe('memo', () => {
             <Counter e={10} />
           </Suspense>,
         );
-        expect(ReactNoop.flush()).toEqual([20]);
+        expect(Scheduler).toFlushAndYield([20]);
         expect(ReactNoop.getChildren()).toEqual([span(20)]);
       });
 
       it('warns if the first argument is undefined', () => {
-        expect(() => memo()).toWarnDev(
+        expect(() =>
+          memo(),
+        ).toErrorDev(
           'memo: The first argument must be a component. Instead ' +
             'received: undefined',
           {withoutStack: true},
@@ -317,7 +321,9 @@ describe('memo', () => {
       });
 
       it('warns if the first argument is null', () => {
-        expect(() => memo(null)).toWarnDev(
+        expect(() =>
+          memo(null),
+        ).toErrorDev(
           'memo: The first argument must be a component. Instead ' +
             'received: null',
           {withoutStack: true},
@@ -334,16 +340,16 @@ describe('memo', () => {
         // Mount
         expect(() => {
           ReactNoop.render(<Fn inner="2" />);
-          ReactNoop.flush();
-        }).toWarnDev(
+          expect(Scheduler).toFlushWithoutYielding();
+        }).toErrorDev(
           'Invalid prop `inner` of type `string` supplied to `FnInner`, expected `number`.',
         );
 
         // Update
         expect(() => {
           ReactNoop.render(<Fn inner={false} />);
-          ReactNoop.flush();
-        }).toWarnDev(
+          expect(Scheduler).toFlushWithoutYielding();
+        }).toErrorDev(
           'Invalid prop `inner` of type `boolean` supplied to `FnInner`, expected `number`.',
         );
       });
@@ -358,8 +364,8 @@ describe('memo', () => {
         // Mount
         expect(() => {
           ReactNoop.render(<Fn outer="3" />);
-          ReactNoop.flush();
-        }).toWarnDev(
+          expect(Scheduler).toFlushWithoutYielding();
+        }).toErrorDev(
           // Outer props are checked in createElement
           'Invalid prop `outer` of type `string` supplied to `FnInner`, expected `number`.',
         );
@@ -367,8 +373,8 @@ describe('memo', () => {
         // Update
         expect(() => {
           ReactNoop.render(<Fn outer={false} />);
-          ReactNoop.flush();
-        }).toWarnDev(
+          expect(Scheduler).toFlushWithoutYielding();
+        }).toErrorDev(
           // Outer props are checked in createElement
           'Invalid prop `outer` of type `boolean` supplied to `FnInner`, expected `number`.',
         );
@@ -389,13 +395,13 @@ describe('memo', () => {
 
         // No warning expected because defaultProps satisfy both.
         ReactNoop.render(<Outer />);
-        ReactNoop.flush();
+        expect(Scheduler).toFlushWithoutYielding();
 
         // Mount
         expect(() => {
           ReactNoop.render(<Outer inner="2" middle="3" outer="4" />);
-          ReactNoop.flush();
-        }).toWarnDev([
+          expect(Scheduler).toFlushWithoutYielding();
+        }).toErrorDev([
           'Invalid prop `outer` of type `string` supplied to `Inner`, expected `number`.',
           'Invalid prop `middle` of type `string` supplied to `Inner`, expected `number`.',
           'Invalid prop `inner` of type `string` supplied to `Inner`, expected `number`.',
@@ -406,12 +412,81 @@ describe('memo', () => {
           ReactNoop.render(
             <Outer inner={false} middle={false} outer={false} />,
           );
-          ReactNoop.flush();
-        }).toWarnDev([
+          expect(Scheduler).toFlushWithoutYielding();
+        }).toErrorDev([
           'Invalid prop `outer` of type `boolean` supplied to `Inner`, expected `number`.',
           'Invalid prop `middle` of type `boolean` supplied to `Inner`, expected `number`.',
           'Invalid prop `inner` of type `boolean` supplied to `Inner`, expected `number`.',
         ]);
+      });
+
+      it('does not drop lower priority state updates when bailing out at higher pri (simple)', async () => {
+        const {useState} = React;
+
+        let setCounter;
+        const Counter = memo(() => {
+          const [counter, _setCounter] = useState(0);
+          setCounter = _setCounter;
+          return counter;
+        });
+
+        function App() {
+          return (
+            <Suspense fallback="Loading...">
+              <Counter />
+            </Suspense>
+          );
+        }
+
+        const root = ReactNoop.createRoot();
+        await ReactNoop.act(async () => {
+          root.render(<App />);
+        });
+        expect(root).toMatchRenderedOutput('0');
+
+        await ReactNoop.act(async () => {
+          setCounter(1);
+          ReactNoop.discreteUpdates(() => {
+            root.render(<App />);
+          });
+        });
+        expect(root).toMatchRenderedOutput('1');
+      });
+
+      it('does not drop lower priority state updates when bailing out at higher pri (complex)', async () => {
+        const {useState} = React;
+
+        let setCounter;
+        const Counter = memo(
+          () => {
+            const [counter, _setCounter] = useState(0);
+            setCounter = _setCounter;
+            return counter;
+          },
+          (a, b) => a.complexProp.val === b.complexProp.val,
+        );
+
+        function App() {
+          return (
+            <Suspense fallback="Loading...">
+              <Counter complexProp={{val: 1}} />
+            </Suspense>
+          );
+        }
+
+        const root = ReactNoop.createRoot();
+        await ReactNoop.act(async () => {
+          root.render(<App />);
+        });
+        expect(root).toMatchRenderedOutput('0');
+
+        await ReactNoop.act(async () => {
+          setCounter(1);
+          ReactNoop.discreteUpdates(() => {
+            root.render(<App />);
+          });
+        });
+        expect(root).toMatchRenderedOutput('1');
       });
     });
   }
